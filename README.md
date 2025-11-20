@@ -15,9 +15,4 @@ A collaborative, offline-first storyboard & animatic tool built in JavaScript.
 ## Tech
 Vanilla JS (or React/Vue/Svelte), IndexedDB, WebRTC, Service Worker, gif.js
 
-## Quick start
-```bash
-git clone https://github.com/YOUR-USERNAME/storyboard-jam.git
-cd storyboard-jam
-npm install
-npm run dev   # or open index.html for pure static site
+
