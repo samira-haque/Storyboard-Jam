@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Storyboard Jam — Single File MVP</title>
+<style>
+  :root{--bg:#0f1724;--card:#0b1220;--muted:#9aa5b1;--accent:#7dd3fc}
+  body{margin:0;font-family:Inter,Segoe UI,Helvetica,Arial,sans-serif;background:var(--bg);color:#e6eef6;display:flex;min-height:100vh;gap:12px;padding:12px}
+  .panel{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:12px;box-shadow:0 4px 18px rgba(2,6,23,0.6)}
+  .left{width:740px;flex-shrink:0}
+  canvas{background:#fff;border-radius:8px;display:block;width:100%;height:420px;touch-action:none}
+  .tools{display:flex;gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap}
+  .tools > *{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.04);padding:8px;border-radius:8px}
+  .tools button{cursor:pointer}
+  .right{flex:1;min-width:260px;display:flex;flex-direction:column;gap:12px}
+  .frames{display:flex;flex-direction:column;gap:8px;max-height:560px;overflow:auto;padding-right:6px}
+  .frame-row{display:flex;gap:8px;align-items:center}
+  .thumb{width:120px;height:68px;border-radius:6px;background:#efefef;object-fit:cover;border:2px solid transparent}
+  .thumb.selected{outline:3px solid var(--accent)}
+  input[type=range]{width:120px}
+  label{font-size:13px;color:var(--muted)}
+  .small{font-size:13px;color:var(--muted)}
+  .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .btn{background:var(--card);border:none;padding:8px 12px;border-radius:8px;color:#e6eef6;cursor:pointer}
+  .danger{background:#7f1d1d}
+  footer{opacity:.7;font-size:12px;color:var(--muted)}
+  .file{display:flex;gap:8px;align-items:center}
+  .meta{font-size:13px;color:var(--muted)}
+  .status{font-size:12px;color:var(--muted);opacity:.9}
+</style>
+</head>
+<body>
+
+<div class="panel left">
+  <div class="topbar">
+    <div>
+      <strong>Storyboard Jam (single-file MVP)</strong>
+      <div class="small">IndexedDB autosave • WebM export</div>
+    </div>
+    <div class="file">
+      <button id="exportWebM" class="btn">Export WebM</button>
+      <button id="downloadJSON" class="btn">Export JSON</button>
+    </div>
+  </div>
+
+  <canvas id="canvas" width="1280" height="720"></canvas>
+
+  <div class="tools">
+    <label>Tool:
+      <select id="tool">
+        <option value="pen">Pen</option>
+        <option value="eraser">Eraser</option>
+      </select>
+    </label>
+
+    <label>Color: <input type="color" id="color" value="#000000"></label>
+    <label>Size: <input id="size" type="range" min="1" max="60" value="6"></label>
+    <button id="clear" class="btn">Clear Frame</button>
+    <button id="undo" class="btn">Undo</button>
+    <button id="redo" class="btn">Redo</button>
+    <button id="addFrame" class="btn">+ Add Frame</button>
+    <button id="duplicateFrame" class="btn">Duplicate</button>
+    <button id="deleteFrame" class="btn danger">Delete</button>
+    <div style="flex:1"></div>
+    <div class="status" id="status">Loading...</div>
+  </div>
+
+  <div style="display:flex;gap:12px;align-items:center;margin-top:8px;">
+    <button id="play" class="btn">Play</button>
+    <label class="small">FPS:
+      <input id="fps" type="number" min="1" max="60" value="12" style="width:64px;margin-left:8px">
+    </label>
+    <label class="small">Loop:
+      <input id="loop" type="checkbox" checked style="margin-left:8px">
+    </label>
+    <div style="flex:1"></div>
+    <div class="small">Frames: <span id="frameCount">0</span></div>
+    <div style="width:8px"></div>
+    <div class="small">Current: <span id="currentIndex">—</span></div>
+  </div>
+</div>
+
+<div class="panel right">
+  <div>
+    <strong>Frames</strong>
+    <div class="small">Click a thumbnail to select frame</div>
+  </div>
+  <div class="frames" id="framesList"></div>
+
+  <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <label class="small">Frame duration (ms):
+      <input id="frameDuration" type="number" value="500" min="50" style="width:100px;margin-left:8px">
+    </label>
+    <button id="setDuration" class="btn">Set for selected</button>
+  </div>
+
+  <hr style="border:none;border-top:1px solid rgba(255,255,255,0.03);margin:12px 0">
+
+  <div>
+    <strong>Project</strong>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button id="saveNow" class="btn">Save Now</button>
+      <button id="loadNow" class="btn">Load</button>
+      <input id="importFile" type="file" accept="application/json" style="display:none">
+      <button id="importBtn" class="btn">Import JSON</button>
+    </div>
+    <div style="margin-top:8px" class="meta">Autosave: <span id="autosave">ON</span></div>
+  </div>
+
+  <hr style="border:none;border-top:1px solid rgba(255,255,255,0.03);margin:12px 0">
+
+  <div>
+    <strong>Help</strong>
+    <div class="small" style="margin-top:6px">
+      • Draw with mouse or touch. • Add frames, set durations, then export WebM. • Project stored locally (IndexedDB).
+    </div>
+  </div>
+
+  <footer style="margin-top:auto">Made with ❤️ — By Samira</footer>
+</div>
+
+<script>
+/* Storyboard Jam — Single File MVP
+   - Save this as index.html and open in browser.
+   - No libraries required.
+   - Exports WebM using MediaRecorder.
+*/
+
+/* ---------- IndexedDB small wrapper ---------- */
+const DB_NAME = 'storyboard-jam-mvp';
+const DB_VERSION = 1;
+const STORE = 'frames';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const r = indexedDB.open(DB_NAME, DB_VERSION);
+    r.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
+    };
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+}
+
+async function putObject(storeName, obj) {
+  const db = await openDB();
+  return new Promise((res,reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).put(obj);
+    tx.oncomplete = ()=>res(true);
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+async function getObject(storeName, key) {
+  const db = await openDB();
+  return new Promise((res,reject)=>{
+    const req = db.transaction(storeName).objectStore(storeName).get(key);
+    req.onsuccess = ()=>res(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+async function getAll(storeName) {
+  const db = await openDB();
+  return new Promise((res,reject)=>{
+    const req = db.transaction(storeName).objectStore(storeName).getAll();
+    req.onsuccess = ()=>res(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+async function clearStore(storeName) {
+  const db = await openDB();
+  return new Promise((res,reject)=>{
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).clear();
+    tx.oncomplete = ()=>res(true);
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+
+/* ---------- App State ---------- */
+let frames = []; // {id, imageDataUrl, duration}
+let currentIndex = -1;
+let undoStack = [], redoStack = [];
+let autosaveOn = true;
+const AUTO_KEY = 'project-meta';
+
+/* ---------- DOM ---------- */
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d', { alpha: false });
+const toolEl = document.getElementById('tool');
+const colorEl = document.getElementById('color');
+const sizeEl = document.getElementById('size');
+const addFrameBtn = document.getElementById('addFrame');
+const duplicateFrameBtn = document.getElementById('duplicateFrame');
+const deleteFrameBtn = document.getElementById('deleteFrame');
+const framesListEl = document.getElementById('framesList');
+const frameCountEl = document.getElementById('frameCount');
+const currentIndexEl = document.getElementById('currentIndex');
+const clearBtn = document.getElementById('clear');
+const undoBtn = document.getElementById('undo');
+const redoBtn = document.getElementById('redo');
+const playBtn = document.getElementById('play');
+const fpsEl = document.getElementById('fps');
+const loopEl = document.getElementById('loop');
+const frameDurationEl = document.getElementById('frameDuration');
+const setDurationBtn = document.getElementById('setDuration');
+const saveNowBtn = document.getElementById('saveNow');
+const loadNowBtn = document.getElementById('loadNow');
+const statusEl = document.getElementById('status');
+const autosaveEl = document.getElementById('autosave');
+const exportWebMBtn = document.getElementById('exportWebM');
+const downloadJSONBtn = document.getElementById('downloadJSON');
+const importBtn = document.getElementById('importBtn');
+const importFile = document.getElementById('importFile');
+
+/* ---------- Canvas drawing ---------- */
+let drawing = false;
+let last = null;
+function setCanvasSizeToCSS() {
+  // keep internal resolution 1280x720; canvas CSS scales automatically
+  canvas.width = 1280;
+  canvas.height = 720;
+}
+setCanvasSizeToCSS();
+ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+function pointerPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const p = e.touches ? e.touches[0] : e;
+  return {
+    x: (p.clientX - rect.left) * (canvas.width / rect.width),
+    y: (p.clientY - rect.top) * (canvas.height / rect.height)
+  };
+}
+
+function beginStroke(e) {
+  e.preventDefault();
+  drawing = true;
+  last = pointerPos(e);
+  ctx.beginPath();
+  ctx.moveTo(last.x, last.y);
+}
+function moveStroke(e) {
+  if (!drawing) return;
+  e.preventDefault();
+  const p = pointerPos(e);
+  const tool = toolEl.value;
+  const size = parseInt(sizeEl.value,10);
+  if (tool === 'eraser') {
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.lineWidth = size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  } else {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = colorEl.value;
+    ctx.lineWidth = size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  }
+  last = p;
+}
+function endStroke(e) {
+  if (!drawing) return;
+  drawing = false;
+  ctx.closePath();
+  saveFrameStateForUndo();
+  scheduleAutosave();
+}
+
+canvas.addEventListener('mousedown', beginStroke);
+canvas.addEventListener('touchstart', beginStroke, {passive:false});
+canvas.addEventListener('mousemove', moveStroke);
+canvas.addEventListener('touchmove', moveStroke, {passive:false});
+window.addEventListener('mouseup', endStroke);
+window.addEventListener('touchend', endStroke);
+
+/* ---------- Frame management ---------- */
+function renderFramesList() {
+  framesListEl.innerHTML = '';
+  frames.forEach((f, i) => {
+    const row = document.createElement('div');
+    row.className = 'frame-row';
+    const img = document.createElement('img');
+    img.src = f.imageDataUrl;
+    img.className = 'thumb' + (i===currentIndex ? ' selected' : '');
+    img.onclick = ()=>selectFrame(i);
+    row.appendChild(img);
+
+    const info = document.createElement('div');
+    info.style.flex='1';
+    info.innerHTML = `<div style="font-size:13px">Frame ${i+1}</div>
+                      <div class="small">dur: ${f.duration} ms</div>`;
+    row.appendChild(info);
+
+    const up = document.createElement('button');
+    up.textContent = '↑';
+    up.onclick = ()=>{ if(i>0){ swapFrames(i, i-1); } };
+    row.appendChild(up);
+    const down = document.createElement('button');
+    down.textContent = '↓';
+    down.onclick = ()=>{ if(i<frames.length-1){ swapFrames(i, i+1);} };
+    row.appendChild(down);
+
+    framesListEl.appendChild(row);
+  });
+  frameCountEl.textContent = frames.length;
+  currentIndexEl.textContent = currentIndex === -1 ? '—' : (currentIndex+1);
+}
+
+function swapFrames(a,b) {
+  const t = frames[a]; frames[a]=frames[b]; frames[b]=t;
+  if (currentIndex === a) currentIndex = b;
+  else if (currentIndex === b) currentIndex = a;
+  renderFramesList();
+  scheduleAutosave();
+}
+
+function selectFrame(i) {
+  if (i<0 || i>=frames.length) return;
+  currentIndex = i;
+  loadFrameToCanvas(frames[i]);
+  renderFramesList();
+  status('Selected frame '+(i+1));
+}
+
+function loadFrameToCanvas(frame) {
+  const img = new Image();
+  img.onload = ()=> {
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    ctx.restore();
+  };
+  img.src = frame.imageDataUrl;
+}
+
+function captureCanvasDataUrl() {
+  // Use JPEG/PNG - PNG to preserve crisp lines
+  return canvas.toDataURL('image/png');
+}
+function addFrame(copyFromIndex=null) {
+  let url;
+  if (copyFromIndex === null) {
+    // capture current canvas as new frame
+    url = captureCanvasDataUrl();
+  } else {
+    url = frames[copyFromIndex].imageDataUrl;
+  }
+  const id = Date.now() + '-' + Math.random().toString(36).slice(2,9);
+  const duration = parseInt(frameDurationEl.value || '500', 10);
+  const f = { id, imageDataUrl: url, duration };
+  frames.push(f);
+  currentIndex = frames.length - 1;
+  renderFramesList();
+  status('Frame added');
+  saveCurrentFrameToDB(currentIndex);
+  scheduleAutosave();
+}
+function deleteCurrentFrame() {
+  if (currentIndex === -1) return;
+  frames.splice(currentIndex,1);
+  if (frames.length===0) {
+    // clear canvas
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    currentIndex = -1;
+  } else {
+    currentIndex = Math.max(0, currentIndex-1);
+    loadFrameToCanvas(frames[currentIndex]);
+  }
+  renderFramesList();
+  scheduleAutosave();
+  status('Frame deleted');
+}
+
+function duplicateCurrentFrame() {
+  if (currentIndex === -1) return;
+  addFrame(currentIndex);
+}
+
+/* ---------- Undo/Redo for drawing on current frame ---------- */
+function saveFrameStateForUndo() {
+  // Capture canvas and push to undo stack (limit size)
+  undoStack.push(canvas.toDataURL('image/png'));
+  if (undoStack.length>50) undoStack.shift();
+  redoStack = [];
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(canvas.toDataURL('image/png'));
+  const url = undoStack.pop();
+  const img = new Image();
+  img.onload = ()=>{ ctx.drawImage(img,0,0,canvas.width,canvas.height); scheduleAutosave(); };
+  img.src = url;
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(canvas.toDataURL('image/png'));
+  const url = redoStack.pop();
+  const img = new Image();
+  img.onload = ()=>{ ctx.drawImage(img,0,0,canvas.width,canvas.height); scheduleAutosave(); };
+  img.src = url;
+}
+
+/* ---------- Save / Load (IndexedDB) ---------- */
+async function saveEntireProjectToDB() {
+  // Clear frames store then put new
+  await clearStore(STORE);
+  for (const f of frames) {
+    await putObject(STORE, f);
+  }
+  await putObject('meta', { key: AUTO_KEY, value: { savedAt: Date.now() } });
+  status('Project saved to IndexedDB');
+}
+async function loadProjectFromDB() {
+  const all = await getAll(STORE);
+  if (!all || all.length===0) {
+    status('No project found in IndexedDB');
+    return;
+  }
+  // restore order by id insertion time (not perfect), but we saved sequentially earlier
+  frames = all;
+  currentIndex = frames.length ? 0 : -1;
+  if (currentIndex !== -1) loadFrameToCanvas(frames[currentIndex]);
+  renderFramesList();
+  status('Project loaded from IndexedDB ('+frames.length+' frames)');
+}
+
+async function saveCurrentFrameToDB(index) {
+  if (index<0 || index>=frames.length) return;
+  await putObject(STORE, frames[index]);
+}
+
+/* ---------- Playback & export ---------- */
+let playing = false;
+let playTimer = null;
+async function playOnce() {
+  if (frames.length===0) return;
+  playing = true;
+  playBtn.textContent = 'Stop';
+  let i = currentIndex===-1 ? 0 : currentIndex;
+  const startIndex = i;
+  const fps = parseInt(fpsEl.value || '12', 10);
+  const loop = loopEl.checked;
+  const showFrame = idx => {
+    loadFrameToCanvas(frames[idx]);
+    currentIndex = idx;
+    renderFramesList();
+  };
+  async function step() {
+    showFrame(i);
+    const delay = Math.max(10, frames[i].duration || (1000/fps));
+    await new Promise(r => playTimer = setTimeout(r, delay));
+    if (!playing) return;
+    i++;
+    if (i >= frames.length) {
+      if (loop) i = 0; else { playing = false; playBtn.textContent = 'Play'; return; }
+    }
+    if (playing) step();
+  }
+  step();
+}
+function stopPlaying() {
+  playing = false;
+  clearTimeout(playTimer);
+  playBtn.textContent = 'Play';
+}
+
+/* Export to WebM by rendering frames sequentially onto an offscreen canvas and recording the canvas stream */
+async function exportToWebM() {
+  if (frames.length===0) { alert('No frames to export'); return; }
+  exportWebMBtn.disabled = true;
+  status('Preparing export...');
+
+  // Offscreen canvas same size
+  const off = document.createElement('canvas');
+  off.width = canvas.width;
+  off.height = canvas.height;
+  const octx = off.getContext('2d');
+  octx.fillStyle = '#ffffff'; octx.fillRect(0,0,off.width,off.height);
+
+  // Draw each frame into an array of images
+  const images = await Promise.all(frames.map(f => {
+    return new Promise(r=>{
+      const im = new Image();
+      im.onload = ()=>r({img:im, duration: f.duration});
+      im.src = f.imageDataUrl;
+    });
+  }));
+
+  // Capture stream and record
+  const stream = off.captureStream(60); // 60fps capture (actual frames controlled by drawing timing)
+  const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' :
+               (MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' : 'video/webm');
+  let recorder;
+  try {
+    recorder = new MediaRecorder(stream, { mimeType: mime });
+  } catch (e) {
+    alert('MediaRecorder unsupported in this browser for WebM export.');
+    exportWebMBtn.disabled = false;
+    return;
+  }
+
+  const chunks = [];
+  recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+
+  recorder.start();
+
+  status('Rendering frames...');
+
+  // Draw frames at their durations
+  for (let i=0;i<images.length;i++) {
+    octx.fillStyle = '#ffffff';
+    octx.fillRect(0,0,off.width,off.height);
+    octx.drawImage(images[i].img, 0, 0, off.width, off.height);
+    // wait for the duration
+    await new Promise(r => setTimeout(r, Math.max(30, images[i].duration || 100)));
+  }
+
+  // wait a bit to flush
+  await new Promise(r => setTimeout(r, 200));
+  recorder.stop();
+
+  await new Promise(r=>recorder.onstop = r);
+
+  const blob = new Blob(chunks, { type: 'video/webm' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'storyboard.webm';
+  a.click();
+  URL.revokeObjectURL(url);
+  exportWebMBtn.disabled = false;
+  status('Export ready — saved as storyboard.webm');
+}
+
+/* ---------- Export / Import JSON ---------- */
+function exportProjectJSON() {
+  const project = { frames, exportedAt: Date.now() };
+  const blob = new Blob([JSON.stringify(project)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'storyboard-jam-project.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importProjectJSONFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const project = JSON.parse(e.target.result);
+      if (!project.frames || !Array.isArray(project.frames)) throw new Error('Invalid project file');
+      frames = project.frames;
+      currentIndex = frames.length ? 0 : -1;
+      if (currentIndex !== -1) loadFrameToCanvas(frames[0]);
+      renderFramesList();
+      scheduleAutosave();
+      status('Project imported ('+frames.length+' frames)');
+    } catch (err) { alert('Import failed: '+err.message); }
+  };
+  reader.readAsText(file);
+}
+
+/* ---------- Utilities ---------- */
+let autosaveTimer = null;
+function scheduleAutosave() {
+  if (!autosaveOn) return;
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(async ()=>{
+    await saveEntireProjectToDB();
+    autosaveIndicator(true);
+  }, 800);
+}
+function autosaveIndicator(on) {
+  autosaveEl.textContent = on ? 'ON' : 'OFF';
+}
+
+/* ---------- UI wiring ---------- */
+addFrameBtn.onclick = ()=>addFrame(null);
+duplicateFrameBtn.onclick = ()=>duplicateCurrentFrame();
+deleteFrameBtn.onclick = ()=>{ if (confirm('Delete current frame?')) deleteCurrentFrame(); };
+clearBtn.onclick = ()=>{ ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); saveFrameStateForUndo(); scheduleAutosave(); };
+undoBtn.onclick = ()=>undo();
+redoBtn.onclick = ()=>redo();
+playBtn.onclick = ()=>{ if (playing) stopPlaying(); else playOnce(); };
+setDurationBtn.onclick = ()=> {
+  const d = parseInt(frameDurationEl.value || '500',10);
+  if (currentIndex!==-1) {
+    frames[currentIndex].duration = d;
+    renderFramesList();
+    scheduleAutosave();
+  }
+};
+saveNowBtn.onclick = ()=>saveEntireProjectToDB();
+loadNowBtn.onclick = ()=>loadProjectFromDB();
+exportWebMBtn.onclick = ()=>exportToWebM();
+downloadJSONBtn.onclick = ()=>exportProjectJSON();
+importBtn.onclick = ()=>importFile.click();
+importFile.onchange = (e)=>{ if (e.target.files.length) importProjectJSONFile(e.target.files[0]); };
+
+status('Ready — create your first frame!');
+
+/* ---------- Initial load: try to load existing project, else seed with one blank frame ---------- */
+(async function init() {
+  try {
+    const existing = await getAll(STORE);
+    if (existing && existing.length>0) {
+      frames = existing;
+      currentIndex = 0;
+      loadFrameToCanvas(frames[0]);
+      status('Loaded project from IndexedDB ('+frames.length+' frames)');
+    } else {
+      // seed with blank frame
+      frames = [];
+      // blank canvas already white
+      addFrame(null);
+    }
+    renderFramesList();
+    autosaveIndicator(autosaveOn);
+    status('Ready');
+  } catch (err) {
+    console.error(err);
+    status('Init error: '+err.message);
+  }
+})();
+
+function status(txt) { statusEl.textContent = txt; }
+
+/* Save current canvas whenever selection changes or before unload */
+window.addEventListener('beforeunload', async (e)=> {
+  if (frames.length && currentIndex!==-1) {
+    frames[currentIndex].imageDataUrl = captureCanvasDataUrl();
+    await saveEntireProjectToDB();
+  }
+});
+
+/* When selecting a frame or modifying canvas, keep frames[currentIndex] updated */
+const saveOnFrameChangeDebounced = debounce(()=>{
+  if (currentIndex!==-1) {
+    frames[currentIndex].imageDataUrl = captureCanvasDataUrl();
+    saveCurrentFrameToDB(currentIndex);
+  }
+}, 500);
+canvas.addEventListener('mouseup', saveOnFrameChangeDebounced);
+canvas.addEventListener('touchend', saveOnFrameChangeDebounced);
+
+/* Small debounce helper */
+function debounce(fn, ms=200) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(()=>fn(...args), ms); };
+}
+
+/* Allow clicking thumbnail to save current canvas to frames before switching */
+framesListEl.addEventListener('click', ()=>{ /* placeholder to capture event order */ });
+
+/* When adding frame - capture current canvas into current frame first */
+addFrameBtn.addEventListener('click', ()=> {
+  if (currentIndex!==-1) frames[currentIndex].imageDataUrl = captureCanvasDataUrl();
+});
+
+/* Update frame object when user clicks Save Now */
+saveNowBtn.addEventListener('click', ()=> {
+  if (currentIndex!==-1) frames[currentIndex].imageDataUrl = captureCanvasDataUrl();
+});
+
+/* clicking on thumbnail will be handled by img.onclick (selectFrame) */
+
+/* Update current frame image before export to ensure latest canvas saved */
+exportWebMBtn.addEventListener('click', ()=> {
+  if (currentIndex!==-1) frames[currentIndex].imageDataUrl = captureCanvasDataUrl();
+});
+
+/* basic keyboard shortcuts */
+window.addEventListener('keydown', (e)=>{
+  if ((e.ctrlKey||e.metaKey) && e.key==='s') { e.preventDefault(); saveEntireProjectToDB(); }
+  if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); }
+});
+
+</script>
+</body>
+</html>
